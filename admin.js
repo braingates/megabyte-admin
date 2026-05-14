@@ -1,5 +1,5 @@
 // Fallback to localhost if developing locally to prevent ERR_NAME_NOT_RESOLVED
-const API_BASE = "https://data-bundle-backend.onrender.com" || "http://localhost:5001" || "http://127.0.0.1:5001""
+const API_BASE = "https://data-bundle-backend.onrender.com" || "http://localhost:5001" || "http://127.0.0.1:5001"
 
 let currentPage = 1;
 let totalPages = 1;
