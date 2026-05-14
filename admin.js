@@ -1,5 +1,8 @@
 // Fallback to localhost if developing locally to prevent ERR_NAME_NOT_RESOLVED
-const API_BASE = "https://data-bundle-backend.onrender.com/api"  || "http://localhost:5001/api" || "http://127.0.0.1:5001/api";
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:5001/api"
+  : "https://data-bundle-backend.onrender.com/api";
+
 
 let currentPage = 1;
 let totalPages = 1;
@@ -30,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadStats() {
   try {
-    const res = await fetch(`${API_BASE}/admin/stats`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE}/admin/dashboard/stats`, { headers: getHeaders() });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || `Stats error: ${res.status}`);
@@ -70,7 +73,7 @@ async function loadOrders() {
 
 async function loadTrends() {
   try {
-    const res = await fetch(`${API_BASE}/admin/trends`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE}/admin/dashboard/trends`, { headers: getHeaders() });
     if (!res.ok) throw new Error(`Trends error: ${res.status}`);
     const data = await res.json();
 
