@@ -1,6 +1,6 @@
 // Fallback to localhost if developing locally to prevent ERR_NAME_NOT_RESOLVED
 const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://localhost:5001/api"
+  ? `http://${window.location.hostname}:5001/api`
   : "https://data-bundle-backend.onrender.com/api";
 
 console.log("🔌 API Base:", API_BASE);
@@ -27,11 +27,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadTrends();
   loadVendorHealth();
   
-  // Handle Unauthorized responses globally
-  const handleAuthError = (status) => {
-    if (status === 401) adminLogin();
-  };
-
   if (document.getElementById("refreshBtn")) {
     document.getElementById("refreshBtn").addEventListener("click", loadOrders);
   }
@@ -53,7 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadStats() {
   try {
-    const res = await fetch(`${API_BASE}/admin/dashboard/stats`, { 
+    const res = await fetch(`${API_BASE}/admin/dashboard/stats`, {
       headers: getHeaders(),
       credentials: "include"
     });

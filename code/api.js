@@ -2,13 +2,15 @@ const STORAGE_KEY = "megabyteStationOrders";
 const FLASH_KEY = "megabyteStationFlash";
 const ADMIN_REFRESH_MS = 15000;
 const PENDING_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
-const API_BASE_URL = (typeof process !== "undefined" && process.env?.API_BASE_URL) || "https://data-bundle-backend.onrender.com";
+const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:5001"
+  : "https://data-bundle-backend.onrender.com";
 
 // Updated network prefixes for Ghana (correct formats)
 const NETWORK_PREFIXES = {
-  MTN: ["024", "054", "055"],
-  Telecel: ["027", "057"],
-  AirtelTigo: ["026", "056"],
+  MTN: ["024", "054", "055", "025", "059", "053"],
+  Telecel: ["020", "050"],
+  AirtelTigo: ["026", "056", "027", "057"],
 };
 
 const VENDOR_NAMES = {
@@ -95,17 +97,17 @@ const OrderService = {
       let url;
       let headers = {};
       
-      // If phone provided, fetch customer-specific orders
+      // If phone provided, fetch customer-specific orders via the public orders endpoint
       if (phone) {
-        url = `${API_BASE_URL}/api/orders/recent/${encodeURIComponent(phone)}`;
+        url = `${API_BASE_URL}/api/orders?search=${encodeURIComponent(phone)}`;
         // No API key needed for customer orders
       } else {
-        // Otherwise, try to fetch admin orders (requires API key)
-        url = `${API_BASE_URL}/api/admin/orders`;
-        headers["x-api-key"] = localStorage.getItem("megabyteAdminKey") || "";
+        // Default to the public orders root instead of a protected admin endpoint
+        // This prevents unauthorized redirects to login for customer views
+        url = `${API_BASE_URL}/api/orders`;
       }
       
-      const response = await fetch(url, { headers });
+      const response = await fetch(url, { headers, credentials: "include" }); // Ensure credentials are included for admin
 
       if (!response.ok) {
         throw new Error(`Failed to fetch orders (${response.status})`);

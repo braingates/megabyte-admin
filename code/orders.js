@@ -16,17 +16,16 @@ async function renderOrders() {
   const query = input.value.trim();
   
   // If user entered a phone or reference, fetch customer's orders for that phone
-  if (query) {
-    // Try to extract phone number from query (first valid one found)
-    const normalizedPhone = OrderService.search(query).length > 0 
-      ? query 
-      : null;
-    
-    if (normalizedPhone) {
-      // Fetch latest orders for this phone from backend
-      await OrderService.fetchOrders(normalizedPhone);
-      localStorage.setItem("megabyteStationCustomerLookup", query);
-    }
+  if (query) { // If there's a query, always attempt to fetch from backend
+    // OrderService.fetchOrders(query) will use the /api/orders?search=... endpoint
+    // for customer-specific searches.
+    await OrderService.fetchOrders(query);
+    localStorage.setItem("megabyteStationCustomerLookup", query);
+  } else {
+    // If no query, clear local orders and display empty state for customer view.
+    // This prevents accidentally fetching admin orders or stale data.
+    OrderService.writeOrders([]); // Clear local storage for customer view
+    localStorage.removeItem("megabyteStationCustomerLookup"); // Clear lookup
   }
   
   const orders = query ? OrderService.search(query) : [];
@@ -87,4 +86,3 @@ input.addEventListener("keydown", (event) => {
 
 renderOrders();
 window.setInterval(renderOrders, 15000); // Re-added customer refresh, but now it fetches from backend
-window.addEventListener("orders:updated", renderOrders);
