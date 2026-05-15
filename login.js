@@ -27,7 +27,7 @@ loginForm.addEventListener('submit', async (e) => {
 
         if (res.ok) {
             // Redirect back to admin dashboard on success
-            window.location.href = 'admin.html';
+            window.location.href = 'megabyte-admin.vercel.app';
         } else {
             const data = await res.json().catch(() => ({}));
             errorMsg.innerText = data.error || 'Invalid Admin Key';
