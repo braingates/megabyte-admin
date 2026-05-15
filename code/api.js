@@ -2,8 +2,8 @@ const STORAGE_KEY = "megabyteStationOrders";
 const FLASH_KEY = "megabyteStationFlash";
 const ADMIN_REFRESH_MS = 15000;
 const PENDING_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
-const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://localhost:5001"
+const API_BASE_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  ? `http://${window.location.hostname}:5001` 
   : "https://data-bundle-backend.onrender.com";
 
 // Updated network prefixes for Ghana (correct formats)
@@ -164,15 +164,16 @@ const OrderService = {
     if (!term) return [];
 
     return this.getOrders().filter((order) => {
-      return [
-        order.reference,
-        order.trackingId,
-        order.transactionReference,
-        order.vendorReference,
-        order.recipientNumber,
-        order.network,
-        order.bundle,
-      ].some((value) => String(value || "").toLowerCase().includes(term));
+      // Use strict matching for customer tracking to prevent privacy leaks
+      const keys = [
+        "reference",
+        "shortTrackingId",
+        "trackingId",
+        "vendorReference",
+        "phone",
+        "recipientNumber"
+      ];
+      return keys.some((key) => String(order[key] || "").toLowerCase() === term);
     });
   },
 };
@@ -192,11 +193,12 @@ const PaymentService = {
     });
 
     const data = await response.json().catch(() => ({}));
+
     if (!response.ok || !data.authorization_url) {
       throw new Error(data.error || "Unable to initialize Paystack payment");
     }
 
-    window.location.href = data.authorization_url;
+    return data.authorization_url;
   },
 
   async handleCallbackFromUrl() {
@@ -218,6 +220,7 @@ const PaymentService = {
     // Here, we just set a flash message and clean the URL.
     if (verifiedStatus === "success") {
       setFlash("Payment successful. Your bundle is being processed.", "success");
+      localStorage.removeItem("megabyteLastOrderRef");
     } else if (verifiedStatus === "failed") {
       setFlash("Payment failed. Please try again or contact support.", "failed");
     }

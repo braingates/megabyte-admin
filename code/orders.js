@@ -1,36 +1,62 @@
-import { OrderService, formatMoney } from "./api.js";
+import { formatMoney, OrderService } from "./api.js";
+import OrderTracker from "./orderTracker.js";
 
-const scroller = document.querySelector("#ordersCardScroller"); // Removed CUSTOMER_REFRESH_MS
+const scroller = document.querySelector("#ordersCardScroller");
 const emptyState = document.querySelector("#ordersEmptyState");
 const input = document.querySelector("#ordersSearchInput");
 const button = document.querySelector("#ordersSearchBtn");
 const savedLookup = localStorage.getItem("megabyteStationCustomerLookup") || "";
+// Input should be empty by default until customer searches
+// input.value = savedLookup; // Removed
 
-input.value = savedLookup;
+let currentTracker = null;
 
 function statusClass(status) {
   return `status ${String(status || "pending").toLowerCase()}`;
 }
 
-async function renderOrders() {
+/**
+ * Main function to manage the OrderTracker lifecycle and trigger UI updates.
+ * This is called when the search button is clicked or Enter is pressed.
+ */
+async function handleSearch() {
   const query = input.value.trim();
-  
-  // If user entered a phone or reference, fetch customer's orders for that phone
-  if (query) { // If there's a query, always attempt to fetch from backend
-    // OrderService.fetchOrders(query) will use the /api/orders?search=... endpoint
-    // for customer-specific searches.
-    await OrderService.fetchOrders(query);
-    localStorage.setItem("megabyteStationCustomerLookup", query);
-  } else {
-    // If no query, clear local orders and display empty state for customer view.
-    // This prevents accidentally fetching admin orders or stale data.
+
+  if (query && !currentTracker) {
+    // Initialize tracker only once per query
+    currentTracker = new OrderTracker(query, updateUIWithOrders);
+    currentTracker.init();
+    localStorage.setItem("megabyteStationCustomerLookup", query); // Save lookup
+  } else if (query && currentTracker && currentTracker.query !== query) {
+    // If query changes, destroy old tracker and create a new one
+    currentTracker.destroy();
+    currentTracker = new OrderTracker(query, updateUIWithOrders);
+    currentTracker.init();
+    localStorage.setItem("megabyteStationCustomerLookup", query); // Save lookup
+  } else if (!query) {
+    // If query is empty, clear everything
+    if (currentTracker) {
+      currentTracker.destroy();
+      currentTracker = null;
+    }
     OrderService.writeOrders([]); // Clear local storage for customer view
     localStorage.removeItem("megabyteStationCustomerLookup"); // Clear lookup
+    updateUIWithOrders([]); // Clear UI immediately
   }
-  
-  const orders = query ? OrderService.search(query) : [];
+  // If query is the same and tracker exists, no action needed here,
+  // tracker's polling/socket will handle updates.
+}
+
+/**
+ * Renders the orders to the UI. This is the callback for OrderTracker.
+ * @param {Array} orders - The list of orders to display.
+ */
+function renderOrders(orders) {
+  const query = input.value.trim(); // Get current query for empty state message
 
   if (!orders.length) {
+    // Show empty state if no orders are provided or found
+    // The message depends on whether a query was entered
     emptyState.textContent = query
       ? "Empty. No recent orders found for this customer."
       : "Empty. Enter your phone number or order reference to view your recent orders.";
@@ -38,7 +64,7 @@ async function renderOrders() {
     scroller.innerHTML = "";
     return;
   }
-
+  
   emptyState.style.display = "none";
   scroller.innerHTML = orders.map((order) => `
     <article class="customer-order-card">
@@ -58,6 +84,10 @@ async function renderOrders() {
           <dt>Amount Paid</dt>
           <dd>${formatMoney(order.amount)}</dd>
         </div>
+         <div>
+          <dt>Bundle</dt>
+          <dd>${order.bundle}</dd>
+        </div>
         <div>
           <dt>Order Status</dt>
           <dd class="${statusClass(order.orderStatus)}">${order.orderStatus}</dd>
@@ -70,8 +100,8 @@ async function renderOrders() {
 
       <footer>
         <div class="order-ids" style="display: flex; flex-direction: column; gap: 2px;">
-          <span>Ref: ${order.reference}</span>
-          <span class="tracking-id">Track ID: <strong>${order.vendorReference || order.trackingId || 'N/A'}</strong></span>
+          <span>Ref: ${order.shortTrackingId || 'N/A'}</span>
+        
         </div>
         <time style="margin-top: 5px; display: block;">${new Date(order.createdAt).toLocaleString()}</time>
       </footer>
@@ -79,10 +109,17 @@ async function renderOrders() {
   `).join("");
 }
 
-button.addEventListener("click", renderOrders);
+function updateUIWithOrders(orders) {
+  renderOrders(orders); // This is the only place renderOrders should be called with data
+}
+
+button.addEventListener("click", handleSearch);
 input.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") renderOrders();
+  if (event.key === "Enter") handleSearch();
 });
 
-renderOrders();
-window.setInterval(renderOrders, 15000); // Re-added customer refresh, but now it fetches from backend
+// Initial state: show empty message, do not auto-load orders
+// The input field is already empty by default due to removing input.value = savedLookup;
+emptyState.textContent = "Empty. Enter your phone number or order reference to view your recent orders.";
+emptyState.style.display = "block";
+scroller.innerHTML = "";

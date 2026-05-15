@@ -101,7 +101,7 @@ async function createOrderAndPay() {
 
   const button = qs("#finalConfirm");
   button.disabled = true;
-  button.textContent = "Processing payment...";
+  button.innerHTML = '<span class="spinner-btn"></span> Processing...';
 
   try {
     const order = {
@@ -114,16 +114,22 @@ async function createOrderAndPay() {
       transactionFee: selectedBundle.fee,
       totalAmount: selectedBundle.total,
     };
-
     localStorage.setItem("megabyteStationCustomerLookup", order.recipientNumber);
-    
-    // Directly initiate payment (which creates the order in backend)
-    await PaymentService.initializePaystack(order);
+    const authUrl = await PaymentService.initializePaystack(order);
+
+    // Update UI to success state
+    button.classList.add("success-btn");
+    button.innerHTML = '<span class="success-anim"><i class="fas fa-check"></i></span> Securely Redirecting...';
+
+    // Brief delay to allow the user to see the success state
+    setTimeout(() => {
+      window.location.href = authUrl;
+    }, 1200);
   } catch (error) {
     button.disabled = false;
+    button.classList.remove("success-btn");
     button.textContent = "Proceed to Payment";
-    const errorMsg = error instanceof Error ? error.message : "Unable to process payment";
-    alert(errorMsg);
+    alert(error.message || "Unable to process payment");
     console.error("Payment error:", error);
   }
 }

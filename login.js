@@ -1,44 +1,55 @@
-const API_BASE = "megabyte-admin.vercel.app" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+/**
+ * Admin Login Handler
+ * Handles authentication and redirection to the dashboard
+ */
+
+// Environment-aware API base selection to prevent Mixed Content errors
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
   ? `http://${window.location.hostname}:5001/api`
   : "https://data-bundle-backend.onrender.com/api";
 
-const loginForm = document.getElementById('loginForm');
-const submitBtn = document.getElementById('submitBtn');
-const errorMsg = document.getElementById('errorMsg');
+console.log("🔌 Auth API Base:", API_BASE);
 
-loginForm.addEventListener('submit', async (e) => {
+const loginForm = document.getElementById("loginForm");
+const errorMsg = document.getElementById("errorMsg");
+const submitBtn = document.getElementById("submitBtn");
+
+if (loginForm) {
+  loginForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    
-    const password = document.getElementById('password').value;
-    
-    // UI State
+    const password = document.getElementById("password").value;
+
+    // UI State: Loading
     submitBtn.disabled = true;
-    submitBtn.innerText = 'Authenticating...';
-    errorMsg.style.display = 'none';
+    submitBtn.textContent = "Authenticating...";
+    errorMsg.style.display = "none";
 
     try {
-        const res = await fetch(`${API_BASE}/admin/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password }),
-            // credentials: "include" is required so the browser accepts the Set-Cookie header
-            credentials: "include"
-        });
+      const response = await fetch(`${API_BASE}/admin/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ password }),
+        // Ensure credentials are included so the HttpOnly cookie is saved
+        credentials: "include"
+      });
 
-        if (res.ok) {
-            // Redirect back to admin dashboard on success
-            window.location.href = 'megabyte-admin.vercel.app';
-        } else {
-            const data = await res.json().catch(() => ({}));
-            errorMsg.innerText = data.error || 'Invalid Admin Key';
-            errorMsg.style.display = 'block';
-            submitBtn.disabled = false;
-            submitBtn.innerText = 'Login to Dashboard';
-        }
+      const data = await response.json();
+
+      if (response.ok) {
+        window.location.href = "admin.html";
+      } else {
+        errorMsg.textContent = data.error || "Invalid credentials. Please try again.";
+        errorMsg.style.display = "block";
+      }
     } catch (err) {
-        errorMsg.innerText = 'Connection error. Is the backend running?';
-        errorMsg.style.display = 'block';
-        submitBtn.disabled = false;
-        submitBtn.innerText = 'Login to Dashboard';
+      console.error("Login error:", err);
+      errorMsg.textContent = "Connection error: Could not reach the authentication server.";
+      errorMsg.style.display = "block";
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Login to Dashboard";
     }
-});
+  });
+}
