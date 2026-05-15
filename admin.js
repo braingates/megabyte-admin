@@ -240,12 +240,12 @@ function renderOrders(orders) {
       <td>${escapeHTML(order.network)}</td>
       <td>${escapeHTML(order.bundle)}</td>
       <td>${escapeHTML(order.phone)}</td>
-      <td>GHS ${Number(order.amount).toFixed(2)}</td>
+      <td>GHS ${Number(order.amount || 0).toFixed(2)}</td>
       <td><span class="badge ${getStatusClass(order.paymentStatus)}">${order.paymentStatus}</span></td>
       <td><span class="badge ${getStatusClass(order.vendorStatus)}">${order.vendorStatus}</span></td>
       <td><span class="badge ${getStatusClass(order.orderStatus)}">${order.orderStatus}</span></td>
       <td>${order.retryCount || 0}</td>
-      <td>${new Date(order.createdAt).toLocaleDateString()}</td>
+      <td>${order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}</td>
     </tr>
   `).join("");
 }
