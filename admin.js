@@ -1,57 +1,49 @@
-// ==========================================
-// API BASE URL
-// ==========================================
+// Fallback to localhost if developing locally to prevent ERR_NAME_NOT_RESOLVED
+const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:5001/api"
+  : "https://data-bundle-backend.onrender.com/api";
 
-const API_BASE =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1"
-    ? "http://localhost:5001"
-    : "https://data-bundle-backend.onrender.com";
-
-// ==========================================
-// STATE
-// ==========================================
+console.log("🔌 API Base:", API_BASE);
+console.log("🌐 Current Origin:", window.location.origin);
 
 let currentPage = 1;
 let totalPages = 1;
 let currentFilters = {};
 
-// ==========================================
-// HEADERS
-// ==========================================
-
 function getHeaders() {
   return {
-    "Content-Type": "application/json",
-    "x-api-key": localStorage.getItem("megabyteAdminKey") || ""
+    "Content-Type": "application/json"
   };
 }
 
-// ==========================================
-// INITIAL LOAD
-// ==========================================
+async function adminLogin() {
+  // Redirect to the professional login page instead of using prompt()
+  window.location.href = "login.html";
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   loadStats();
   loadOrders();
   loadTrends();
   loadVendorHealth();
+  
+  // Handle Unauthorized responses globally
+  const handleAuthError = (status) => {
+    if (status === 401) adminLogin();
+  };
 
-  document
-    .getElementById("refreshBtn")
-    ?.addEventListener("click", loadOrders);
-
-  document
-    .getElementById("searchInput")
-    ?.addEventListener("input", debounce(searchOrders, 500));
-
-  document
-    .getElementById("networkFilter")
-    ?.addEventListener("change", filterOrders);
-
-  document
-    .getElementById("statusFilter")
-    ?.addEventListener("change", filterOrders);
+  if (document.getElementById("refreshBtn")) {
+    document.getElementById("refreshBtn").addEventListener("click", loadOrders);
+  }
+  if (document.getElementById("searchInput")) {
+    document.getElementById("searchInput").addEventListener("input", debounce(searchOrders, 500));
+  }
+  if (document.getElementById("networkFilter")) {
+    document.getElementById("networkFilter").addEventListener("change", filterOrders);
+  }
+  if (document.getElementById("statusFilter")) {
+    document.getElementById("statusFilter").addEventListener("change", filterOrders);
+  }
 
   setInterval(() => {
     loadStats();
@@ -59,54 +51,37 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 30000);
 });
 
-// ==========================================
-// LOAD STATS
-// ==========================================
-
 async function loadStats() {
   try {
-    const res = await fetch(
-      `${API_BASE}/api/admin/dashboard/stats`,
-      {
-        method: "GET",
-        headers: getHeaders(),
-        credentials: "include"
-      }
-    );
-
+    const res = await fetch(`${API_BASE}/admin/dashboard/stats`, { 
+      headers: getHeaders(),
+      credentials: "include"
+    });
+    
     if (!res.ok) {
+      if (res.status === 401) return adminLogin();
       const errorData = await res.json().catch(() => ({}));
-
-      throw new Error(
-        errorData.error || `Stats error: ${res.status}`
-      );
+      console.error(`❌ Stats error: ${res.status}`, errorData);
+      throw new Error(errorData.error || `Stats error: ${res.status}`);
     }
-
+    
     const data = await res.json();
+    console.log("✅ Stats loaded:", data);
 
-    document.getElementById("total").innerText =
-      data.summary?.total || 0;
-
-    document.getElementById("success").innerText =
-      data.summary?.completed || 0;
-
-    document.getElementById("revenue").innerText =
-      Number(data.financial?.totalRevenue || 0).toFixed(2);
-
-    document.getElementById("profit").innerText =
-      Number(data.financial?.totalProfit || 0).toFixed(2);
-
+    // Map data from the structured backend response (summary and financial objects)
+    const totalEl = document.getElementById("total");
+    const successEl = document.getElementById("success");
+    const revenueEl = document.getElementById("revenue");
+    const profitEl = document.getElementById("profit");
+    
+    if (totalEl) totalEl.innerText = data.summary?.total || 0;
+    if (successEl) successEl.innerText = data.summary?.completed || 0;
+    if (revenueEl) revenueEl.innerText = Number(data.financial?.totalRevenue || 0).toFixed(2);
+    if (profitEl) profitEl.innerText = Number(data.financial?.totalProfit || 0).toFixed(2);
   } catch (err) {
-    console.error(
-      "Stats load failed:",
-      err.message
-    );
+    console.error("❌ Stats load failed:", err);
   }
 }
-
-// ==========================================
-// LOAD ORDERS
-// ==========================================
 
 async function loadOrders() {
   try {
@@ -116,145 +91,101 @@ async function loadOrders() {
       ...currentFilters
     });
 
-    const res = await fetch(
-      `${API_BASE}/api/admin/orders?${params}`,
-      {
-        method: "GET",
-        headers: getHeaders(),
-        credentials: "include"
-      }
-    );
-
+    const res = await fetch(`${API_BASE}/admin/orders?${params}`, { 
+      headers: getHeaders(),
+      credentials: "include"
+    });
+    
     if (!res.ok) {
+      if (res.status === 401) return adminLogin();
       const errorData = await res.json().catch(() => ({}));
-
-      throw new Error(
-        errorData.error || `Orders error: ${res.status}`
-      );
+      console.error(`❌ Orders error: ${res.status}`, errorData);
+      throw new Error(`Orders error: ${res.status}`);
     }
-
+    
     const data = await res.json();
+    console.log("✅ Orders loaded:", data.orders?.length || 0);
 
     renderOrders(data.orders || []);
-
-    updatePagination(
-      data.total || 0,
-      data.pages || 1
-    );
-
+    updatePagination(data.total, data.pages);
   } catch (err) {
-    console.error(
-      "Orders load failed:",
-      err.message
-    );
+    console.error("❌ Orders load failed:", err);
+    const tbody = document.getElementById("tableBody");
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: red;">Failed to load orders: ${err.message}</td></tr>`;
+    }
   }
 }
-
-// ==========================================
-// LOAD TRENDS
-// ==========================================
 
 async function loadTrends() {
   try {
-    const res = await fetch(
-      `${API_BASE}/api/admin/dashboard/trends`,
-      {
-        method: "GET",
-        headers: getHeaders(),
-        credentials: "include"
-      }
-    );
-
+    const res = await fetch(`${API_BASE}/admin/dashboard/trends`, { 
+      headers: getHeaders(),
+      credentials: "include"
+    });
+    
     if (!res.ok) {
+      if (res.status === 401) return adminLogin();
       const errorData = await res.json().catch(() => ({}));
-
-      throw new Error(
-        errorData.error || `Trends error: ${res.status}`
-      );
+      console.error(`❌ Trends error: ${res.status}`, errorData);
+      throw new Error(`Trends error: ${res.status}`);
     }
-
+    
     const data = await res.json();
+    console.log("✅ Trends loaded:", data?.length || 0);
 
-    if (Array.isArray(data)) {
-      renderChart(data);
-    }
-
+    if (Array.isArray(data)) renderChart(data);
   } catch (err) {
-    console.error(
-      "Trends load failed:",
-      err.message
-    );
+    console.error("❌ Trends load failed:", err);
   }
 }
-
-// ==========================================
-// LOAD VENDOR HEALTH
-// ==========================================
 
 async function loadVendorHealth() {
   try {
-    const res = await fetch(
-      `${API_BASE}/api/admin/vendors/health`,
-      {
-        method: "GET",
-        headers: getHeaders(),
-        credentials: "include"
-      }
-    );
-
+    const res = await fetch(`${API_BASE}/admin/vendors/health`, { 
+      headers: getHeaders(),
+      credentials: "include"
+    });
+    
     if (!res.ok) {
+      if (res.status === 401) return adminLogin();
       const errorData = await res.json().catch(() => ({}));
-
-      throw new Error(
-        errorData.error || `Health error: ${res.status}`
-      );
+      console.error(`❌ Health error: ${res.status}`, errorData);
+      throw new Error(`Health error: ${res.status}`);
     }
-
+    
     const data = await res.json();
-
-    const getDot = (status) =>
-      status === "up" || status === "online"
-        ? "<span class='green'>●</span>"
-        : "<span class='red'>●</span>";
-
-    document.getElementById("vendorHealth").innerHTML = `
-      MTN: ${getDot(data.MTN?.status)} ${data.MTN?.status || "Offline"} |
-      Telecel: ${getDot(data.Telecel?.status)} ${data.Telecel?.status || "Offline"} |
-      AirtelTigo: ${getDot(data.AirtelTigo?.status)} ${data.AirtelTigo?.status || "Offline"}
-    `;
-
+    console.log("✅ Vendor health loaded:", data);
+    
+    const getDot = (status) => status === 'up' || status === 'online' ? "<span class='green'>●</span>" : "<span class='red'>●</span>";
+    
+    const vendorHealthEl = document.getElementById("vendorHealth");
+    if (vendorHealthEl) {
+      vendorHealthEl.innerHTML = `
+        MTN: ${getDot(data.MTN?.status)} ${data.MTN?.status || 'Offline'} | 
+        Telecel: ${getDot(data.Telecel?.status)} ${data.Telecel?.status || 'Offline'} | 
+        AirtelTigo: ${getDot(data.AirtelTigo?.status)} ${data.AirtelTigo?.status || 'Offline'}
+      `;
+    }
   } catch (err) {
-    console.error(
-      "Health check failed:",
-      err.message
-    );
+    console.error("❌ Health check failed:", err);
   }
 }
 
-// ==========================================
-// STATUS COLORS
-// ==========================================
-
 function getStatusClass(status) {
   const map = {
-    success: "green",
-    completed: "green",
-    failed: "red",
-    pending: "orange",
-    processing: "blue",
-    retrying: "yellow"
+    success: 'green',
+    completed: 'green',
+    failed: 'red',
+    pending: 'orange',
+    processing: 'blue',
+    retrying: 'yellow'
   };
-
-  return map[status?.toLowerCase()] || "gray";
+  return map[status?.toLowerCase()] || 'gray';
 }
-
-// ==========================================
-// ESCAPE HTML
-// ==========================================
 
 function escapeHTML(str) {
   if (!str) return "";
-
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -263,184 +194,101 @@ function escapeHTML(str) {
     .replace(/'/g, "&#039;");
 }
 
-// ==========================================
-// RENDER ORDERS
-// ==========================================
-
 function renderOrders(orders) {
   const tbody = document.getElementById("tableBody");
-
   if (!tbody) return;
-
-  tbody.innerHTML = orders
-    .map(order => `
-      <tr>
-        <td>${escapeHTML(order.reference)}</td>
-        <td>${escapeHTML(order.network)}</td>
-        <td>${escapeHTML(order.bundle)}</td>
-        <td>${escapeHTML(order.phone)}</td>
-        <td>GHS ${Number(order.amount || 0).toFixed(2)}</td>
-
-        <td>
-          <span class="badge ${getStatusClass(order.paymentStatus)}">
-            ${escapeHTML(order.paymentStatus)}
-          </span>
-        </td>
-
-        <td>
-          <span class="badge ${getStatusClass(order.vendorStatus)}">
-            ${escapeHTML(order.vendorStatus)}
-          </span>
-        </td>
-
-        <td>
-          <span class="badge ${getStatusClass(order.orderStatus)}">
-            ${escapeHTML(order.orderStatus)}
-          </span>
-        </td>
-
-        <td>${order.retryCount || 0}</td>
-
-        <td>
-          ${order.createdAt
-            ? new Date(order.createdAt).toLocaleDateString()
-            : "-"}
-        </td>
-      </tr>
-    `)
-    .join("");
+  
+  if (!orders || orders.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center;">No orders found</td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = orders.map(order => `
+    <tr>
+      <td>${escapeHTML(order.reference)}</td>
+      <td>${escapeHTML(order.network)}</td>
+      <td>${escapeHTML(order.bundle)}</td>
+      <td>${escapeHTML(order.phone)}</td>
+      <td>GHS ${Number(order.amount).toFixed(2)}</td>
+      <td><span class="badge ${getStatusClass(order.paymentStatus)}">${order.paymentStatus}</span></td>
+      <td><span class="badge ${getStatusClass(order.vendorStatus)}">${order.vendorStatus}</span></td>
+      <td><span class="badge ${getStatusClass(order.orderStatus)}">${order.orderStatus}</span></td>
+      <td>${order.retryCount || 0}</td>
+      <td>${new Date(order.createdAt).toLocaleDateString()}</td>
+    </tr>
+  `).join("");
 }
-
-// ==========================================
-// PAGINATION
-// ==========================================
 
 function updatePagination(total, pages) {
   totalPages = pages || 1;
-
-  document.getElementById(
-    "pageInfo"
-  ).innerText = `Page ${currentPage} of ${totalPages}`;
-
-  document.getElementById("prevPage").disabled =
-    currentPage <= 1;
-
-  document.getElementById("nextPage").disabled =
-    currentPage >= totalPages;
+  const pageInfoEl = document.getElementById("pageInfo");
+  const prevBtn = document.getElementById("prevPage");
+  const nextBtn = document.getElementById("nextPage");
+  
+  if (pageInfoEl) pageInfoEl.innerText = `Page ${currentPage} of ${totalPages}`;
+  if (prevBtn) prevBtn.disabled = currentPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
 }
-
-// ==========================================
-// FILTERS
-// ==========================================
 
 function filterOrders() {
   currentFilters = {
-    network:
-      document.getElementById("networkFilter")?.value || "",
-
-    status:
-      document.getElementById("statusFilter")?.value || ""
+    network: document.getElementById("networkFilter")?.value || "",
+    status: document.getElementById("statusFilter")?.value || ""
   };
-
   currentPage = 1;
-
   loadOrders();
 }
-
-// ==========================================
-// SEARCH
-// ==========================================
 
 function searchOrders() {
-  currentFilters.search =
-    document.getElementById("searchInput")?.value || "";
-
+  const searchInput = document.getElementById("searchInput");
+  currentFilters.search = searchInput?.value || "";
   currentPage = 1;
-
   loadOrders();
 }
-
-// ==========================================
-// DEBOUNCE
-// ==========================================
 
 function debounce(fn, delay) {
   let timeout;
-
   return (...args) => {
     clearTimeout(timeout);
-
-    timeout = setTimeout(() => {
-      fn.apply(this, args);
-    }, delay);
+    timeout = setTimeout(() => fn.apply(this, args), delay);
   };
 }
 
-// ==========================================
-// CHART
-// ==========================================
-
-let trendsChart = null;
-
 function renderChart(data) {
   try {
-    const canvas =
-      document.getElementById("trendsChart");
-
+    const canvas = document.getElementById("trendsChart");
     if (!canvas) {
-      console.error("Chart canvas not found");
+      console.error("Chart canvas element not found");
+      return;
+    }
+    
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.error("Chart context not available");
+      return;
+    }
+    
+    if (!Array.isArray(data)) {
+      console.error("renderChart expected array, got:", typeof data);
       return;
     }
 
-    const ctx = canvas.getContext("2d");
-
-    if (trendsChart) {
-      trendsChart.destroy();
-    }
-
     const labels = data.map(d => d.label);
+    const revenue = data.map(d => parseFloat(d.revenue));
+    const profit = data.map(d => parseFloat(d.profit));
 
-    const revenue = data.map(d =>
-      Number(d.revenue || 0)
-    );
-
-    const profit = data.map(d =>
-      Number(d.profit || 0)
-    );
-
-    trendsChart = new Chart(ctx, {
+    new Chart(ctx, {
       type: "line",
-
       data: {
         labels,
-
         datasets: [
-          {
-            label: "Revenue",
-            data: revenue,
-            borderColor: "#2563eb",
-            tension: 0.3
-          },
-
-          {
-            label: "Profit",
-            data: profit,
-            borderColor: "#10b981",
-            tension: 0.3
-          }
+          { label: "Revenue", data: revenue, borderColor: "#2563eb", tension: 0.3 },
+          { label: "Profit", data: profit, borderColor: "#10b981", tension: 0.3 }
         ]
       },
-
-      options: {
-        responsive: true,
-        maintainAspectRatio: false
-      }
+      options: { responsive: true, maintainAspectRatio: false }
     });
-
   } catch (err) {
-    console.error(
-      "Chart rendering error:",
-      err.message
-    );
+    console.error("Chart rendering error:", err);
   }
 }
