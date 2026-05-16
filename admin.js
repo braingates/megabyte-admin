@@ -118,7 +118,8 @@ function initSocket() {
 
 async function loadStats() {
   try {
-    const res = await fetch(`${API_BASE}/admin/dashboard/stats`, {
+    const params = new URLSearchParams(currentFilters);
+    const res = await fetch(`${API_BASE}/admin/dashboard/stats?${params}`, {
       headers: getHeaders(),
       credentials: "include"
     });
@@ -272,6 +273,19 @@ function formatStatusText(status) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const vendorCostRates = {
+  MTN: 0.88,
+  Telecel: 0.86,
+  AirtelTigo: 0.84,
+};
+
+function estimateProfit(order) {
+  if (order.paymentStatus !== "completed") return 0;
+  const amount = Number(order.amount || 0);
+  const cost = Number(order.vendorCost || (amount * (vendorCostRates[order.network] || 0.87)));
+  return amount - cost;
+}
+
 function renderOrders(orders) {
   const tbody = document.getElementById("tableBody");
   if (!tbody) return;
@@ -292,7 +306,7 @@ function renderOrders(orders) {
       <td>${escapeHTML(order.bundle)}</td>
       <td>${escapeHTML(order.phone)}</td>
       <td>GHS ${Number(order.amount || 0).toFixed(2)}</td>
-      <td><span class="badge ${getStatusClass(order.paymentStatus)}">${order.paymentStatus}</span></td>
+      <td><span class="badge ${getStatusClass(order.paymentStatus)}">${order.paymentStatus === 'completed' ? 'Successful' : order.paymentStatus}</span></td>
       <td><span class="badge ${getStatusClass(order.vendorStatus)}" title="${tooltip}">${order.vendorStatus}</span></td>
       <td><span class="badge ${getStatusClass(order.orderStatus)}" title="${tooltip}">${formatStatusText(order.orderStatus)}</span></td>
       <td>${order.retryCount || 0}</td>
@@ -319,6 +333,7 @@ function filterOrders() {
   };
   currentPage = 1;
   loadOrders();
+  loadStats();
 }
 
 function searchOrders() {
@@ -326,6 +341,7 @@ function searchOrders() {
   currentFilters.search = searchInput?.value || "";
   currentPage = 1;
   loadOrders();
+  loadStats();
 }
 
 function debounce(fn, delay) {
