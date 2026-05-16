@@ -11,10 +11,13 @@ console.log("🌐 Current Origin:", window.location.origin);
 let currentPage = 1;
 let totalPages = 1;
 let currentFilters = {};
+let currentSort = { field: "createdAt", order: "desc" };
 
 function getHeaders() {
+  const token = localStorage.getItem("admin_token");
   return {
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "Authorization": token ? `Bearer ${token}` : ""
   };
 }
 
@@ -42,6 +45,32 @@ document.addEventListener("DOMContentLoaded", () => {
   if (document.getElementById("statusFilter")) {
     document.getElementById("statusFilter").addEventListener("change", filterOrders);
   }
+
+  // Setup column sorting handlers
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const field = th.dataset.sort;
+      
+      if (currentSort.field === field) {
+        currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.field = field;
+        currentSort.order = 'asc';
+      }
+      
+      // Update visual active state
+      document.querySelectorAll('th.sortable').forEach(h => {
+        h.classList.remove('active-sort');
+        const icon = h.querySelector('.sort-icon');
+        if (icon) icon.innerText = '↕';
+      });
+      
+      th.classList.add('active-sort');
+      th.querySelector('.sort-icon').innerText = currentSort.order === 'asc' ? '↑' : '↓';
+      
+      loadOrders();
+    });
+  });
 
   // Safety fallback: refresh every 5 minutes instead of aggressive polling
   setInterval(() => {
@@ -71,6 +100,14 @@ function initSocket() {
     console.log("💰 Payment confirmed via Socket:", data);
     loadOrders();
     loadStats();
+  });
+
+  socket.on("statsUpdated", (data) => {
+    console.log("📈 Stats update received via Socket:", data);
+    loadStats();
+    if (data.type === "ORDER_SYNC" || data.type === "ORDER_COMPLETED") {
+      loadOrders();
+    }
   });
 
   socket.on("vendorHealth", (data) => {
@@ -116,6 +153,8 @@ async function loadOrders() {
     const params = new URLSearchParams({
       page: currentPage,
       limit: 50,
+      sortBy: currentSort.field,
+      sortOrder: currentSort.order,
       ...currentFilters
     });
 
@@ -209,6 +248,7 @@ function getStatusClass(status) {
     completed: 'green',
     failed: 'red',
     pending: 'orange',
+    queued: 'orange',
     processing: 'blue',
     retrying: 'yellow'
   };
@@ -225,6 +265,13 @@ function escapeHTML(str) {
     .replace(/'/g, "&#039;");
 }
 
+function formatStatusText(status) {
+  if (!status) return "N/A";
+  const s = String(status).toLowerCase();
+  if (s === 'completed' || s === 'delivered' || s === 'success') return 'Delivered';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function renderOrders(orders) {
   const tbody = document.getElementById("tableBody");
   if (!tbody) return;
@@ -234,7 +281,11 @@ function renderOrders(orders) {
     return;
   }
   
-  tbody.innerHTML = orders.map(order => `
+  tbody.innerHTML = orders.map(order => {
+    const rawRes = order.vendorResponse ? JSON.stringify(order.vendorResponse, null, 2) : "No response data available";
+    const tooltip = escapeHTML(rawRes);
+    
+    return `
     <tr>
       <td>${escapeHTML(order.reference)}</td>
       <td>${escapeHTML(order.network)}</td>
@@ -242,12 +293,12 @@ function renderOrders(orders) {
       <td>${escapeHTML(order.phone)}</td>
       <td>GHS ${Number(order.amount || 0).toFixed(2)}</td>
       <td><span class="badge ${getStatusClass(order.paymentStatus)}">${order.paymentStatus}</span></td>
-      <td><span class="badge ${getStatusClass(order.vendorStatus)}">${order.vendorStatus}</span></td>
-      <td><span class="badge ${getStatusClass(order.orderStatus)}">${order.orderStatus}</span></td>
+      <td><span class="badge ${getStatusClass(order.vendorStatus)}" title="${tooltip}">${order.vendorStatus}</span></td>
+      <td><span class="badge ${getStatusClass(order.orderStatus)}" title="${tooltip}">${formatStatusText(order.orderStatus)}</span></td>
       <td>${order.retryCount || 0}</td>
       <td>${order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}</td>
     </tr>
-  `).join("");
+  `;}).join("");
 }
 
 function updatePagination(total, pages) {

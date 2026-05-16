@@ -38,6 +38,8 @@ if (loginForm) {
       const data = await response.json();
 
       if (response.ok) {
+        // Store token for Header-based authentication (robust for cross-domain)
+        localStorage.setItem("admin_token", data.token);
         window.location.href = "admin.html";
       } else {
         errorMsg.textContent = data.error || "Invalid credentials. Please try again.";
